@@ -485,7 +485,11 @@
       "namespace": "Shopify",
       "provider": "shopify",
       "serviceType": "graphql",
-      "authenticationType": "custom"
+      "authenticationType": "custom",
+      "options": {
+        "shop": "",
+        "endpoint": ""
+      }
     }
   }
 }
