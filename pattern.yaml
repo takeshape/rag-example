@@ -1,3 +1,8 @@
 name: Rag Example
-description: 'Exported 05/14/2024, 8:33 AM'
+description: 'An example of how to use RAG with Shopify and OpenAI'
 defaultTimezone: America/New_York
+categories:
+  - OpenAI
+  - Shopify
+  - AI
+  - RAG
