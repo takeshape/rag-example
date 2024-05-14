@@ -1,0 +1,491 @@
+{
+  "$schema": "https://schema.takeshape.io/project-schema",
+  "defaultLocale": "en-us",
+  "locales": [
+    "en-us"
+  ],
+  "queries": {
+    "getRelatedProductList": {
+      "shape": "PaginatedList<shopify:Product>",
+      "resolver": {
+        "compose": [
+          {
+            "name": "delegate",
+            "id": "createEmbedding",
+            "to": "openai:Mutation.createEmbedding",
+            "args": {
+              "ops": [
+                {
+                  "path": "input",
+                  "value": {
+                    "model": "text-embedding-3-small",
+                    "encoding_format": "float"
+                  }
+                },
+                {
+                  "path": "input.input",
+                  "mapping": "$args.text"
+                }
+              ]
+            },
+            "results": {
+              "ops": [
+                {
+                  "path": "vector",
+                  "mapping": "$currentResolver.data[0].embedding"
+                }
+              ]
+            }
+          },
+          {
+            "shapeName": "Shopify_Product",
+            "name": "takeshape:vectorSearch",
+            "service": "takeshape",
+            "args": {
+              "ops": [
+                {
+                  "path": "vector.name",
+                  "value": "vector"
+                },
+                {
+                  "path": "vector.value",
+                  "mapping": "$resolvers.createEmbedding.vector"
+                },
+                {
+                  "path": "size",
+                  "mapping": "$args.size"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "args": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    "completion": {
+      "shape": "string",
+      "resolver": {
+        "compose": [
+          {
+            "name": "delegate",
+            "id": "getRelatedProductList",
+            "to": "Query.getRelatedProductList",
+            "options": {
+              "selectionSet": "{ items {title description} }"
+            },
+            "args": {
+              "ops": [
+                {
+                  "path": "text",
+                  "mapping": "$args.text"
+                },
+                {
+                  "path": "size",
+                  "value": 1
+                }
+              ]
+            },
+            "results": {
+              "ops": [
+                {
+                  "path": "$",
+                  "mapping": "$currentResolver.items[0]"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delegate",
+            "to": "openai:Mutation.createChatCompletion",
+            "options": {
+              "selectionSet": "{ choices { message { role content } } }"
+            },
+            "args": {
+              "ops": [
+                {
+                  "path": "input",
+                  "value": {
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                      {
+                        "role": "system",
+                        "content": "You are a helpful assistant."
+                      },
+                      {
+                        "role": "user",
+                        "content": ""
+                      }
+                    ]
+                  }
+                },
+                {
+                  "path": "input.messages[1].content",
+                  "mapping": [
+                    [
+                      "get",
+                      {
+                        "path": [
+                          "$args.text",
+                          "$resolvers.getRelatedProductList.title",
+                          "$resolvers.getRelatedProductList.description"
+                        ]
+                      }
+                    ],
+                    [
+                      "format",
+                      {
+                        "template": "Answer the following question:\n %s\n by using the following text:\n %s %s"
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            "results": {
+              "ops": [
+                {
+                  "path": "$",
+                  "mapping": "$currentResolver.choices[0].message.content"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "args": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    "getIndexedShopifyProductList": {
+      "shape": "PaginatedList<Shopify_Product>",
+      "resolver": {
+        "shapeName": "Shopify_Product",
+        "name": "takeshape:queryApiIndex",
+        "service": "takeshape",
+        "options": {
+          "indexedShape": "Shopify_Product"
+        }
+      },
+      "description": "Fetch Shopify_Product data from the API Index.",
+      "args": "TSListArgs<Shopify_Product>"
+    },
+    "Shopify_products": {
+      "resolver": {
+        "name": "graphql:query",
+        "service": "shopify",
+        "fieldName": "products"
+      },
+      "args": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "integer",
+            "description": "Returns up to the first `n` elements from the list."
+          },
+          "after": {
+            "type": "string",
+            "description": "Returns the elements that come after the specified cursor."
+          },
+          "last": {
+            "type": "integer",
+            "description": "Returns up to the last `n` elements from the list."
+          },
+          "before": {
+            "type": "string",
+            "description": "Returns the elements that come before the specified cursor."
+          },
+          "reverse": {
+            "type": "boolean",
+            "description": "Reverse the order of the underlying list.",
+            "default": false
+          },
+          "sortKey": {
+            "@ref": "shopify:ProductSortKeys",
+            "description": "Sort the underlying list by the given key.",
+            "default": "ID"
+          },
+          "query": {
+            "type": "string",
+            "description": "Apply one or multiple filters to the query.\n| name | description | acceptable_values | default_value | example_use |\n| ---- | ---- | ---- | ---- | ---- |\n| barcode |\n| bundles |\n| created_at |\n| delivery_profile_id |\n| error_feedback |\n| gift_card |\n| has_only_composites |\n| has_only_default_variant |\n| has_variant_with_components |\n| id |\n| inventory_total |\n| is_price_reduced |\n| out_of_stock_somewhere |\n| price |\n| product_configuration_owner |\n| product_publication_status |\n| product_type |\n| publishable_status |\n| published_status |\n| sku |\n| status |\n| tag |\n| tag_not |\n| title |\n| updated_at |\n| vendor |\nRefer to the detailed [search syntax](https://shopify.dev/api/usage/search-syntax) for more information about using filters."
+          },
+          "savedSearchId": {
+            "type": "string",
+            "@tag": "id",
+            "description": "The ID of an existing saved search.\nThe search’s query string is used as the query argument.\nRefer to [SavedSearch](https://shopify.dev/api/admin-graphql/latest/objects/savedsearch)."
+          }
+        }
+      },
+      "shape": "Shopify_ProductConnection"
+    },
+    "Shopify_product": {
+      "resolver": {
+        "name": "graphql:query",
+        "service": "shopify",
+        "fieldName": "product"
+      },
+      "args": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "@tag": "id",
+            "description": "The ID of the Product to return."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "shape": "Shopify_Product"
+    }
+  },
+  "mutations": {
+    "OpenAI_createEmbedding": {
+      "shape": "OpenAI_CreateEmbeddingResponse",
+      "resolver": {
+        "name": "rest:post",
+        "service": "openai",
+        "path": "/embeddings",
+        "body": {
+          "ops": [
+            {
+              "path": "$",
+              "mapping": "$args.input"
+            }
+          ],
+          "serialize": {
+            "content": {
+              "contentType": "application/json"
+            }
+          }
+        },
+        "headers": {
+          "ops": [
+            {
+              "path": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "description": "Creates an embedding vector representing the input text.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "@ref": "openai:CreateEmbeddingInput"
+          }
+        },
+        "required": [
+          "input"
+        ]
+      }
+    },
+    "OpenAI_createChatCompletion": {
+      "shape": "OpenAI_CreateChatCompletionResponse",
+      "resolver": {
+        "name": "rest:post",
+        "service": "openai",
+        "path": "/chat/completions",
+        "body": {
+          "ops": [
+            {
+              "path": "$",
+              "mapping": "$args.input"
+            }
+          ],
+          "serialize": {
+            "content": {
+              "contentType": "application/json"
+            }
+          }
+        },
+        "headers": {
+          "ops": [
+            {
+              "path": "content-type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "description": "Creates a model response for the given chat conversation.",
+      "args": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "@ref": "openai:CreateChatCompletionInput"
+          }
+        },
+        "required": [
+          "input"
+        ]
+      }
+    }
+  },
+  "shapes": {
+    "Shopify_Product": {
+      "id": "Shopify_Product",
+      "name": "Shopify_Product",
+      "title": "Shopify Product",
+      "cache": {
+        "enabled": true,
+        "triggers": [
+          {
+            "type": "schedule",
+            "loader": "list",
+            "interval": 1440
+          },
+          {
+            "type": "webhook",
+            "loader": "get",
+            "service": "shopify",
+            "events": [
+              "products/create",
+              "products/update",
+              "products/delete"
+            ]
+          }
+        ],
+        "fragment": {
+          "maxDepth": 2
+        }
+      },
+      "loaders": {
+        "list": {
+          "query": "shopify:Query.products"
+        },
+        "get": {
+          "query": "shopify:Query.product"
+        }
+      },
+      "schema": {
+        "extends": [
+          {
+            "@ref": "shopify:Product"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "vector": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "title": "Vector",
+                "@tag": "vector",
+                "@dependencies": "{title description tags}",
+                "@resolver": {
+                  "name": "delegate",
+                  "to": "openai:Mutation.createEmbedding",
+                  "options": {
+                    "selectionSet": "{ data { embedding } }"
+                  },
+                  "args": {
+                    "ops": [
+                      {
+                        "path": "input",
+                        "value": {
+                          "model": "text-embedding-3-small",
+                          "encoding_format": "float"
+                        }
+                      },
+                      {
+                        "path": "input.input",
+                        "mapping": [
+                          [
+                            "get",
+                            {
+                              "path": [
+                                "$source.title",
+                                "$source.description"
+                              ]
+                            }
+                          ],
+                          [
+                            "format",
+                            {
+                              "template": "%s %s"
+                            }
+                          ]
+                        ]
+                      }
+                    ]
+                  },
+                  "results": {
+                    "ops": [
+                      {
+                        "path": "$",
+                        "mapping": "$finalResolver.data[0].embedding"
+                      }
+                    ]
+                  }
+                }
+              },
+              "text": {}
+            }
+          }
+        ]
+      },
+      "interfaces": [
+        "shopify:HasMetafieldDefinitions",
+        "shopify:HasMetafields",
+        "shopify:HasPublishedTranslations",
+        "shopify:LegacyInteroperability",
+        "shopify:Navigable",
+        "shopify:Node",
+        "shopify:OnlineStorePreviewable",
+        "shopify:Publishable"
+      ]
+    }
+  },
+  "workflows": {},
+  "forms": {},
+  "schemaVersion": "3.41.0",
+  "apiVersion": "2",
+  "services": {
+    "openai": {
+      "id": "openai",
+      "title": "OpenAI",
+      "namespace": "OpenAI",
+      "provider": "openai",
+      "serviceType": "openapi",
+      "authenticationType": "bearer",
+      "options": {
+        "endpoint": "https://api.openai.com/v1/",
+        "spec": "https://raw.githubusercontent.com/takeshape/openapi-specs/813784d8fcac5b3fd4e468ce6f715b89c9fcb73f/specs/openai/v2.yml",
+        "transformVersion": "2.0.0",
+        "introspectedAt": "2024-04-15T20:22:53.202Z"
+      }
+    },
+    "shopify": {
+      "id": "shopify",
+      "title": "Shopify",
+      "namespace": "Shopify",
+      "provider": "shopify",
+      "serviceType": "graphql",
+      "authenticationType": "custom"
+    }
+  }
+}
