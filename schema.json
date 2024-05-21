@@ -395,7 +395,7 @@
                 },
                 "title": "Vector",
                 "@tag": "vector",
-                "@dependencies": "{title description tags}",
+                "@dependencies": "{title description}",
                 "@resolver": {
                   "name": "delegate",
                   "to": "openai:Mutation.createEmbedding",
