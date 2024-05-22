@@ -48,7 +48,42 @@ Once your services are connected now try out the API in the API Explorer
 
 ## How it works
 
-This example demonstrates how to use TakeShape's vector capabilities combined with API Indexing to enable the RAG use-case.
+This example demonstrates how to use TakeShape's vector capabilities combined with indexing to enable the RAG use-case. A prerequisite for RAG is to populate a vector database, for this example we will use TakeShape's built-in index. The first step to preparing our data is to extend `Shopify_Product` with a vector property that contains an embedding created by OpenAI. Once we have a our extended `Shopify_Product` we can use API Indexing to iterate over every product and store the combined data in our Index:
+
+```mermaid
+sequenceDiagram
+    participant TakeShape
+    participant Shopify
+    participant OpenAI
+    participant Index
+
+    TakeShape->>Shopify: 1. Bulk query products from shopify
+    Shopify->>TakeShape: 2. Shopify returns all products
+    TakeShape->>OpenAI: 3. Create embeddings for product text fields
+    OpenAI->>TakeShape: 4. OpenAI returns embeddings
+    TakeShape->>Index: 5. Store Product + embeddings in TakeShape Index
+```
+This combined `Shopify_Product` will be kept up to date by listening to Shopify webhooks and will be fully re-indexed every 24hrs. 
+
+Now that our `Shopify_Product` data is stored in the built-in index we can perform RAG:
+```mermaid
+sequenceDiagram
+    actor User
+    participant TakeShape
+    participant Index
+    participant OpenAI
+
+    User->>TakeShape: 1. GraphQL containing user prompt
+    TakeShape->>OpenAI: 2. Create embedding of user prompt
+    OpenAI->>TakeShape: 3. OpenAI returns vector
+    TakeShape->>Index: 4. Use vector to search TakeShape Index
+    Index->>TakeShape: 5. Return related products
+    TakeShape->>OpenAI: 6. Combine related results with original prompt and send to GPT 3.5
+    OpenAI->>TakeShape: 7. OpenAI returns generated text
+    TakeShape->>User: 8. GraphQL response
+```
+## Schema
+This section explains the schema features and steps used to enable RAG. The starting point of this guide is a project created with the [web client](https://app.takeshape.io) with both "Shopify Admin" and "OpenAI" services added and `Shopify_Product` added.
 
 ### Add vector property
 The first step is to add a vector property to our `Shopify_Product` shape:
