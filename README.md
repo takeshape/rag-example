@@ -18,7 +18,7 @@
 
 1. Create an OpenAI API Key https://platform.openai.com/api-keys with at least the "Model capabilities" permissions this example uses `/v1/embeddings` and `/v1/chat/completions`
 2. Copy/paste your API key into the service configuration dialog
-3. CLick "Save"
+3. Click "Save"
 
 #### Shopify Admin
 <img width="600" alt="Connect Shopify Admin" src="https://github.com/takeshape/rag-example/assets/428120/66227bda-8bbc-4e53-a9cc-c4a14f5a1649">
