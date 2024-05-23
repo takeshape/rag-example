@@ -16,7 +16,7 @@
 #### OpenAI
 <img width="600" alt="Connect OpenAI" src="https://github.com/takeshape/rag-example/assets/428120/72a15246-1d34-4409-9378-980eba715945">
 
-1. Create an OpenAI API Key https://platform.openai.com/api-keys with at least the "Model capabilities" permissions this example uses `/v1/embeddings` and `/v1/chat/completions`
+1. Create an OpenAI API Key https://platform.openai.com/api-keys with the "Models" and "Model capabilities" permissions (this example uses `/v1/embeddings` and `/v1/chat/completions`)
 2. Copy/paste your API key into the service configuration dialog
 3. Click "Save"
 
