@@ -103,106 +103,22 @@ Vectors are arrays of floating point numbers which is easy to express using the 
 ```json
 {
   "vector": {
-    ...
-    "@resolver": {
-      "name": "delegate",
-      "to": "openai:Mutation.createEmbedding",
-      "options": {
-        "selectionSet": "{ data { embedding } }"
-      },
-      ...
-    }
-  }
-}
-```
-We use the `delegate` resolver to delegate to the `createEmbedding` mutation provided by our OpenAI service. To send the text content of `Shopify_Product` to `createEmbedding` we use the `args` mapping and `@dependencies` annotation:
-```json
-{
-  "vector": {
-    ...
-    "@resolver": {
-      ...
-      "args": {
-        "ops": [
-          {
-            "path": "input",
-            "value": {
-              "model": "text-embedding-3-small",
-              "encoding_format": "float"
-            }
-          },
-          {
-            "path": "input.input",
-            "mapping": [
-              [
-                "get",
-                {
-                  "path": [
-                    "$source.title",
-                    "$source.description"
-                  ]
-                }
-              ],
-              [
-                "format",
-                {
-                  "template": "%s %s"
-                }
-              ]
-            ]
-          }
-        ]
-      }
-    }
-  }
-}
-```
-We use `args.ops` to set the `input` arg with an object that looks like:
-```json
-{
-  "model": "text-embedding-3-small",
-  "encoding_format": "float",
-  "input": "{title} {description}"
-}
-
-```
-Using `get` and `format` directives we concatenate the `title` and `description` properties and and assign the result to `input.input`. To ensure that we always always load the `title` and `description` when reading the `vector` field we use `@depdendencies`:
-```json
-{
-  "vector": {
-    ...
+    "type": "array",
+    "items": {"type": "number"},
+    "title": "Vector",
+    "@tag": "vector",
     "@dependencies": "{title description}",
     "@resolver": {
-      ...
+      "name": "ai:createEmbedding",
+      "service": "openai",
+      "model": "text-embedding-3-small",
+      "options": {"useDependencies": true}
     }
   }
 }
 ```
-To grab the vector value from the response of `createEmbedding` we use `results` mapping:
-```json
-{
-  "vector": {
-    ...
-    "@resolver": {
-      "name": "delegate",
-      "to": "openai:Mutation.createEmbedding",
-      "options": {
-        "selectionSet": "{ data { embedding } }"
-      },
-      ...
-      "results": {
-        "ops": [
-          {
-            "path": "$",
-            "mapping": "$finalResolver.data[0].embedding"
-          }
-        ]
-      }
-    }
-  }
-}
-```
-`options.selectionSet` defines the fragment that `createEmbedding` returns and `results.ops[0]` defines how to map that response to our vector property `$`.
+We use the `ai:createEmbedding` resolver to send the text content of `Shopify_Product`, as defined by `@dependencies`, to OpenAI to create a vector.
+
 
 ### Enable API Indexing
 After adding the vector property to `Shopify_Product` the next step is to enable indexing:
@@ -257,9 +173,9 @@ Once indexing is enabled the next step is to create the `getRelatedProductList` 
       "resolver": {
         "compose": [
           {
-            "name": "delegate",
+            "name": "ai:createEmbedding",
             "id": "createEmbedding",
-            "to": "openai:Mutation.createEmbedding",
+            "service": "openai",
             ...
           },
           {
@@ -288,34 +204,15 @@ Once indexing is enabled the next step is to create the `getRelatedProductList` 
   }
 }
 ```
-This query uses a `compose` resolver to delegate to `createEmbedding` and then pass the resulting embedding vector to `takeshape:vectorSearch` which searches our indexed `Shopify_Product`. First let's look at the resolver to fetch the embedding:
+This query uses a `compose` resolver to execute  `ai:createEmbedding` and then pass the resulting vector to `takeshape:vectorSearch` which searches our indexed `Shopify_Product`. First let's look at the resolver to fetch the embedding:
 ```json
 {
-  "name": "delegate",
+  "name": "ai:createEmbedding",
   "id": "createEmbedding",
-  "to": "openai:Mutation.createEmbedding",
+  "service": "openai",
+  "model": "text-embedding-3-small",
   "args": {
-    "ops": [
-      {
-        "path": "input",
-        "value": {
-          "model": "text-embedding-3-small",
-          "encoding_format": "float"
-        }
-      },
-      {
-        "path": "input.input",
-        "mapping": "$args.text"
-      }
-    ]
-  },
-  "results": {
-    "ops": [
-      {
-        "path": "vector",
-        "mapping": "$currentResolver.data[0].embedding"
-      }
-    ]
+    "ops": [{"path": "input", "mapping": "$args.text"}]
   }
 }
 ```
@@ -327,31 +224,24 @@ This resolver looks very similar to the resolver in the previous section, but it
   "service": "takeshape",
   "args": {
     "ops": [
-      {
-        "path": "vector.name",
-        "value": "vector"
-      },
+      {"path": "vector.name", "value": "vector"},
       {
         "path": "vector.value",
-        "mapping": "$resolvers.createEmbedding.vector"
+        "mapping": "$resolvers.createEmbedding"
       },
-      {
-        "path": "size",
-        "mapping": "$args.size"
-      }
+      {"path": "size", "mapping": "$args.size"}
     ]
-  }
 }
 ```
 Note that the `vector.name` is set to `"vector"` to correspond with the property name on `Shopify_Product`. The `size` argument determines the number of related (k in k-nearest neighbors).
 
-### Create `completion` query
-The last step is to put it all together with the `completion` query. To generate text in response to a users prompt we are composing `getRelatedProductList` with OpenAI's `createChatCompletion`:
+### Create `chat` mutation
+The last step is to put it all together with the `chat` mutation. To generate text in response to a users prompt we are composing `getRelatedProductList` with OpenAI's `createChatCompletion`:
 
 ```json
 {
   "queries": {
-    "completion": {
+    "chat": {
       "shape": "string",
       "resolver": {
         "compose": [
@@ -362,8 +252,7 @@ The last step is to put it all together with the `completion` query. To generate
             ...
           },
           {
-            "name": "delegate",
-            "to": "openai:Mutation.createChatCompletion",
+            "name": "ai:generateText",
             ...
           }
         ]
@@ -414,86 +303,14 @@ First we take the `text` arg and fetch top related product using `getRelatedProd
   }
 }
 ```
-Then we combine the text from the top related product and the user's original prompt and send it to GPT 3.5 via OpenAI's `createChatCompletion` mutation:
+Then we combine the text from the top related product and the user's original prompt and send it to GPT 3.5 using's `ai:generateText` resolver:
 ```json
 {
-  "name": "delegate",
-  "to": "openai:Mutation.createChatCompletion",
-  "options": {
-    "selectionSet": "{ choices { message { role content } } }"
-  },
-  "args": {
-    "ops": [
-      {
-        "path": "input",
-        "value": {
-          "model": "gpt-3.5-turbo",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are a helpful assistant."
-            },
-            {
-              "role": "user",
-              "content": ""
-            }
-          ]
-        }
-      },
-      {
-        "path": "input.messages[1].content",
-        "mapping": [
-          [
-            "get",
-            {
-              "path": [
-                "$args.text",
-                "$resolvers.getRelatedProductList.title",
-                "$resolvers.getRelatedProductList.description"
-              ]
-            }
-          ],
-          [
-            "format",
-            {
-              "template": "Answer the following question:\n %s\n by using the following text:\n %s %s"
-            }
-          ]
-        ]
-      }
-    ]
-  },
-  "results": {
-    "ops": [
-      {
-        "path": "$",
-        "mapping": "$currentResolver.choices[0].message.content"
-      }
-    ]
-  }
+  "name": "ai:generateText",
+  "service": "openai",
+  "model": "gpt-3.5-turbo",
+  "systemPrompt": "You are a helpful assistant.",
+  "inputTemplate": "Answer the following question:\n{$args.input} \n\nby using the following text:\n{$resolvers.getRelatedProductList.title} {$resolvers.getRelatedProductList.description}"
 }
 ```
-The key to RAG is using the user's prompt and relevant data from a vector search and combining it into a new prompt for the LLM:
-```json
-{
-  "path": "input.messages[1].content",
-  "mapping": [
-    [
-      "get",
-      {
-        "path": [
-          "$args.text",
-          "$resolvers.getRelatedProductList.title",
-          "$resolvers.getRelatedProductList.description"
-        ]
-      }
-    ],
-    [
-      "format",
-      {
-        "template": "Answer the following question:\n %s\n by using the following text:\n %s %s"
-      }
-    ]
-  ]
-}
-```
+

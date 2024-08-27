@@ -10,31 +10,12 @@
       "resolver": {
         "compose": [
           {
-            "name": "delegate",
+            "name": "ai:createEmbedding",
             "id": "createEmbedding",
-            "to": "openai:Mutation.createEmbedding",
+            "service": "openai",
+            "model": "text-embedding-3-small",
             "args": {
-              "ops": [
-                {
-                  "path": "input",
-                  "value": {
-                    "model": "text-embedding-3-small",
-                    "encoding_format": "float"
-                  }
-                },
-                {
-                  "path": "input.input",
-                  "mapping": "$args.text"
-                }
-              ]
-            },
-            "results": {
-              "ops": [
-                {
-                  "path": "vector",
-                  "mapping": "$currentResolver.data[0].embedding"
-                }
-              ]
+              "ops": [{"path": "input", "mapping": "$args.text"}]
             }
           },
           {
@@ -43,18 +24,12 @@
             "service": "takeshape",
             "args": {
               "ops": [
-                {
-                  "path": "vector.name",
-                  "value": "vector"
-                },
+                {"path": "vector.name", "value": "vector"},
                 {
                   "path": "vector.value",
-                  "mapping": "$resolvers.createEmbedding.vector"
+                  "mapping": "$resolvers.createEmbedding"
                 },
-                {
-                  "path": "size",
-                  "mapping": "$args.size"
-                }
+                {"path": "size", "mapping": "$args.size"}
               ]
             }
           }
@@ -63,118 +38,10 @@
       "args": {
         "type": "object",
         "properties": {
-          "text": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer"
-          }
+          "text": {"type": "string"},
+          "size": {"type": "integer"}
         },
-        "required": [
-          "text"
-        ]
-      }
-    },
-    "completion": {
-      "shape": "string",
-      "resolver": {
-        "compose": [
-          {
-            "name": "delegate",
-            "id": "getRelatedProductList",
-            "to": "Query.getRelatedProductList",
-            "options": {
-              "selectionSet": "{ items {title description} }"
-            },
-            "args": {
-              "ops": [
-                {
-                  "path": "text",
-                  "mapping": "$args.text"
-                },
-                {
-                  "path": "size",
-                  "value": 1
-                }
-              ]
-            },
-            "results": {
-              "ops": [
-                {
-                  "path": "$",
-                  "mapping": "$currentResolver.items[0]"
-                }
-              ]
-            }
-          },
-          {
-            "name": "delegate",
-            "to": "openai:Mutation.createChatCompletion",
-            "options": {
-              "selectionSet": "{ choices { message { role content } } }"
-            },
-            "args": {
-              "ops": [
-                {
-                  "path": "input",
-                  "value": {
-                    "model": "gpt-3.5-turbo",
-                    "messages": [
-                      {
-                        "role": "system",
-                        "content": "You are a helpful assistant."
-                      },
-                      {
-                        "role": "user",
-                        "content": ""
-                      }
-                    ]
-                  }
-                },
-                {
-                  "path": "input.messages[1].content",
-                  "mapping": [
-                    [
-                      "get",
-                      {
-                        "path": [
-                          "$args.text",
-                          "$resolvers.getRelatedProductList.title",
-                          "$resolvers.getRelatedProductList.description"
-                        ]
-                      }
-                    ],
-                    [
-                      "format",
-                      {
-                        "template": "Answer the following question:\n %s\n by using the following text:\n %s %s"
-                      }
-                    ]
-                  ]
-                }
-              ]
-            },
-            "results": {
-              "ops": [
-                {
-                  "path": "$",
-                  "mapping": "$currentResolver.choices[0].message.content"
-                }
-              ]
-            }
-          }
-        ]
-      },
-      "args": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "text"
-        ]
+        "required": ["text"]
       }
     },
     "getIndexedShopifyProductList": {
@@ -183,9 +50,7 @@
         "shapeName": "Shopify_Product",
         "name": "takeshape:queryApiIndex",
         "service": "takeshape",
-        "options": {
-          "indexedShape": "Shopify_Product"
-        }
+        "options": {"indexedShape": "Shopify_Product"}
       },
       "description": "Fetch Shopify_Product data from the API Index.",
       "args": "TSListArgs<Shopify_Product>"
@@ -253,93 +118,39 @@
             "description": "The ID of the Product to return."
           }
         },
-        "required": [
-          "id"
-        ]
+        "required": ["id"]
       },
       "shape": "Shopify_Product"
     }
   },
   "mutations": {
-    "OpenAI_createEmbedding": {
-      "shape": "OpenAI_CreateEmbeddingResponse",
+    "chat": {
+      "shape": "TSChatResponse",
+      "args": "TSChatArgs",
       "resolver": {
-        "name": "rest:post",
-        "service": "openai",
-        "path": "/embeddings",
-        "body": {
-          "ops": [
-            {
-              "path": "$",
-              "mapping": "$args.input"
+        "compose": [
+          {
+            "name": "delegate",
+            "id": "getRelatedProductList",
+            "to": "Query.getRelatedProductList",
+            "options": {"selectionSet": "{ items {title description} }"},
+            "args": {
+              "ops": [
+                {"path": "text", "mapping": "$args.input"},
+                {"path": "size", "value": "1"}
+              ]
+            },
+            "results": {
+              "ops": [{"path": "$", "mapping": "$currentResolver.items[0]"}]
             }
-          ],
-          "serialize": {
-            "content": {
-              "contentType": "application/json"
-            }
+          },
+          {
+            "name": "ai:generateText",
+            "service": "openai",
+            "model": "gpt-3.5-turbo",
+            "systemPrompt": "You are a helpful assistant.",
+            "inputTemplate": "Answer the following question:\n{$args.input} \n\nby using the following text:\n{$resolvers.getRelatedProductList.title} {$resolvers.getRelatedProductList.description}"
           }
-        },
-        "headers": {
-          "ops": [
-            {
-              "path": "content-type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "description": "Creates an embedding vector representing the input text.",
-      "args": {
-        "type": "object",
-        "properties": {
-          "input": {
-            "@ref": "openai:CreateEmbeddingInput"
-          }
-        },
-        "required": [
-          "input"
-        ]
-      }
-    },
-    "OpenAI_createChatCompletion": {
-      "shape": "OpenAI_CreateChatCompletionResponse",
-      "resolver": {
-        "name": "rest:post",
-        "service": "openai",
-        "path": "/chat/completions",
-        "body": {
-          "ops": [
-            {
-              "path": "$",
-              "mapping": "$args.input"
-            }
-          ],
-          "serialize": {
-            "content": {
-              "contentType": "application/json"
-            }
-          }
-        },
-        "headers": {
-          "ops": [
-            {
-              "path": "content-type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "description": "Creates a model response for the given chat conversation.",
-      "args": {
-        "type": "object",
-        "properties": {
-          "input": {
-            "@ref": "openai:CreateChatCompletionInput"
-          }
-        },
-        "required": [
-          "input"
         ]
       }
     }
@@ -352,95 +163,37 @@
       "cache": {
         "enabled": true,
         "triggers": [
-          {
-            "type": "schedule",
-            "loader": "list",
-            "interval": 1440
-          },
+          {"type": "schedule", "loader": "list", "interval": 1440},
           {
             "type": "webhook",
             "loader": "get",
             "service": "shopify",
-            "events": [
-              "products/create",
-              "products/update",
-              "products/delete"
-            ]
+            "events": ["products/create", "products/update", "products/delete"]
           }
         ],
-        "fragment": {
-          "maxDepth": 2
-        }
+        "fragment": {"maxDepth": 2}
       },
       "loaders": {
-        "list": {
-          "query": "shopify:Query.products"
-        },
-        "get": {
-          "query": "shopify:Query.product"
-        }
+        "list": {"query": "shopify:Query.products"},
+        "get": {"query": "shopify:Query.product"}
       },
       "schema": {
         "extends": [
-          {
-            "@ref": "shopify:Product"
-          },
+          {"@ref": "shopify:Product"},
           {
             "type": "object",
             "properties": {
               "vector": {
                 "type": "array",
-                "items": {
-                  "type": "number"
-                },
+                "items": {"type": "number"},
                 "title": "Vector",
                 "@tag": "vector",
                 "@dependencies": "{title description}",
                 "@resolver": {
-                  "name": "delegate",
-                  "to": "openai:Mutation.createEmbedding",
-                  "options": {
-                    "selectionSet": "{ data { embedding } }"
-                  },
-                  "args": {
-                    "ops": [
-                      {
-                        "path": "input",
-                        "value": {
-                          "model": "text-embedding-3-small",
-                          "encoding_format": "float"
-                        }
-                      },
-                      {
-                        "path": "input.input",
-                        "mapping": [
-                          [
-                            "get",
-                            {
-                              "path": [
-                                "$source.title",
-                                "$source.description"
-                              ]
-                            }
-                          ],
-                          [
-                            "format",
-                            {
-                              "template": "%s %s"
-                            }
-                          ]
-                        ]
-                      }
-                    ]
-                  },
-                  "results": {
-                    "ops": [
-                      {
-                        "path": "$",
-                        "mapping": "$finalResolver.data[0].embedding"
-                      }
-                    ]
-                  }
+                  "name": "ai:createEmbedding",
+                  "service": "openai",
+                  "model": "text-embedding-3-small",
+                  "options": {"useDependencies": true}
                 }
               }
             }
