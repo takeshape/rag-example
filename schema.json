@@ -214,7 +214,7 @@
   },
   "workflows": {},
   "forms": {},
-  "schemaVersion": "3.41.0",
+  "schemaVersion": "3.44.0",
   "apiVersion": "2",
   "services": {
     "openai": {
