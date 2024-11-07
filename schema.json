@@ -149,7 +149,7 @@
             "service": "openai",
             "model": "gpt-3.5-turbo",
             "systemPrompt": "You are a helpful assistant.",
-            "inputTemplate": "Answer the following question:\n{$args.input} \n\nby using the following text:\n{$resolvers.getRelatedProductList.title} {$resolvers.getRelatedProductList.description}"
+            "inputTemplate": "Answer the following question:\n{$args.input} \n\nby using the following text:\n{$resultsById.getRelatedProductList.title} {$resultsById.getRelatedProductList.description}"
           }
         ]
       }
